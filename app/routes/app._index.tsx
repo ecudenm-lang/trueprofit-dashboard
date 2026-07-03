@@ -2,13 +2,11 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import {
   Page,
-  Layout,
   Text,
   Card,
   BlockStack,
   InlineGrid,
   InlineStack,
-  Box,
   Badge,
   DataTable,
 } from "@shopify/polaris";
