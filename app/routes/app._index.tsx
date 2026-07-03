@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useLoaderData, Link } from "@remix-run/react";
 import {
   Page,
   Text,
@@ -8,6 +8,7 @@ import {
   InlineGrid,
   InlineStack,
   Badge,
+  Button,
   DataTable,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
@@ -16,14 +17,10 @@ import { authenticate } from "../shopify.server";
 type PnlRow = {
   day: string;
   num_orders: number;
-  revenue: number;
-  refunds: number;
-  cogs: number;
-  gateway_fees: number;
-  ad_spend: number;
-  fixed_expenses: number;
-  gross_profit: number;
-  net_profit: number;
+  revenue_usd: number;
+  cogs_usd: number;
+  ad_spend_usd: number;
+  net_profit_usd: number;
   net_margin_pct: number;
 };
 
@@ -36,7 +33,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let error: string | null = null;
 
   if (!url || !key) {
-    error = "Faltan SUPABASE_URL / SUPABASE_ANON_KEY en las variables de entorno.";
+    error = "Faltan SUPABASE_URL / SUPABASE_ANON_KEY.";
   } else {
     try {
       const res = await fetch(
@@ -53,9 +50,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return { rows, error };
 };
 
-const money = (n: number) =>
-  new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(
-    n || 0,
+const usd = (n: number) =>
+  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
+    Number(n) || 0,
   );
 
 function NetProfitChart({ rows }: { rows: PnlRow[] }) {
@@ -64,24 +61,24 @@ function NetProfitChart({ rows }: { rows: PnlRow[] }) {
   const W = 720;
   const H = 180;
   const pad = 24;
-  const vals = data.map((r) => Number(r.net_profit) || 0);
+  const vals = data.map((r) => Number(r.net_profit_usd) || 0);
   const max = Math.max(1, ...vals);
   const min = Math.min(0, ...vals);
   const range = max - min || 1;
   const bw = (W - pad * 2) / data.length;
   const y0 = H - pad - ((0 - min) / range) * (H - pad * 2);
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Beneficio neto por día">
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Beneficio neto por día (USD)">
       <line x1={pad} y1={y0} x2={W - pad} y2={y0} stroke="#c9cccf" strokeWidth="1" />
       {data.map((r, i) => {
-        const v = Number(r.net_profit) || 0;
+        const v = Number(r.net_profit_usd) || 0;
         const h = (Math.abs(v) / range) * (H - pad * 2);
         const x = pad + i * bw + bw * 0.15;
         const y = v >= 0 ? y0 - h : y0;
         const fill = v >= 0 ? "#2c6ecb" : "#d72c0d";
         return (
           <rect key={i} x={x} y={y} width={bw * 0.7} height={Math.max(1, h)} fill={fill} rx="2">
-            <title>{`${r.day}: ${money(v)}`}</title>
+            <title>{`${r.day}: ${usd(v)}`}</title>
           </rect>
         );
       })}
@@ -94,10 +91,10 @@ export default function Dashboard() {
 
   const totals = rows.reduce(
     (a, r) => ({
-      revenue: a.revenue + Number(r.revenue || 0),
-      net: a.net + Number(r.net_profit || 0),
-      ads: a.ads + Number(r.ad_spend || 0),
-      cogs: a.cogs + Number(r.cogs || 0),
+      revenue: a.revenue + Number(r.revenue_usd || 0),
+      net: a.net + Number(r.net_profit_usd || 0),
+      ads: a.ads + Number(r.ad_spend_usd || 0),
+      cogs: a.cogs + Number(r.cogs_usd || 0),
       orders: a.orders + Number(r.num_orders || 0),
     }),
     { revenue: 0, net: 0, ads: 0, cogs: 0, orders: 0 },
@@ -107,17 +104,23 @@ export default function Dashboard() {
   const tableRows = rows.map((r) => [
     r.day,
     String(r.num_orders),
-    money(Number(r.revenue)),
-    money(Number(r.cogs)),
-    money(Number(r.ad_spend)),
-    money(Number(r.net_profit)),
+    usd(Number(r.revenue_usd)),
+    usd(Number(r.cogs_usd)),
+    usd(Number(r.ad_spend_usd)),
+    usd(Number(r.net_profit_usd)),
     `${Number(r.net_margin_pct).toFixed(1)}%`,
   ]);
 
   return (
     <Page>
-      <TitleBar title="TrueProfit Copia — P&L en tiempo real" />
+      <TitleBar title="TrueProfit Copia — P&L en USD" />
       <BlockStack gap="500">
+        <InlineStack align="end">
+          <Link to="/app/costs">
+            <Button variant="primary">Configurar costos (COGS)</Button>
+          </Link>
+        </InlineStack>
+
         {error && (
           <Card>
             <Text as="p" tone="critical">
@@ -127,21 +130,21 @@ export default function Dashboard() {
         )}
 
         <InlineGrid columns={{ xs: 1, sm: 2, md: 5 }} gap="400">
-          <KpiCard label="Ingresos (30d)" value={money(totals.revenue)} />
+          <KpiCard label="Ingresos (30d)" value={usd(totals.revenue)} />
           <KpiCard
             label="Beneficio neto (30d)"
-            value={money(totals.net)}
+            value={usd(totals.net)}
             tone={totals.net >= 0 ? "success" : "critical"}
           />
           <KpiCard label="Margen neto" value={`${margin.toFixed(1)}%`} />
-          <KpiCard label="Gasto en ads (30d)" value={money(totals.ads)} />
+          <KpiCard label="Gasto en ads (30d)" value={usd(totals.ads)} />
           <KpiCard label="Pedidos (30d)" value={String(totals.orders)} />
         </InlineGrid>
 
         <Card>
           <BlockStack gap="300">
             <Text as="h2" variant="headingMd">
-              Beneficio neto por día
+              Beneficio neto por día (USD)
             </Text>
             <NetProfitChart rows={rows} />
           </BlockStack>
@@ -154,28 +157,12 @@ export default function Dashboard() {
             </Text>
             {rows.length === 0 ? (
               <Text as="p" tone="subdued">
-                Aún no hay datos. En cuanto entren pedidos por el webhook aparecerán aquí.
+                Aún no hay datos.
               </Text>
             ) : (
               <DataTable
-                columnContentTypes={[
-                  "text",
-                  "numeric",
-                  "numeric",
-                  "numeric",
-                  "numeric",
-                  "numeric",
-                  "numeric",
-                ]}
-                headings={[
-                  "Día",
-                  "Pedidos",
-                  "Ingresos",
-                  "COGS",
-                  "Ads",
-                  "Beneficio neto",
-                  "Margen",
-                ]}
+                columnContentTypes={["text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"]}
+                headings={["Día", "Pedidos", "Ingresos", "COGS", "Ads", "Beneficio neto", "Margen"]}
                 rows={tableRows}
               />
             )}
@@ -205,9 +192,7 @@ function KpiCard({
           <Text as="span" variant="headingLg">
             {value}
           </Text>
-          {tone && (
-            <Badge tone={tone}>{tone === "success" ? "Positivo" : "Negativo"}</Badge>
-          )}
+          {tone && <Badge tone={tone}>{tone === "success" ? "Positivo" : "Negativo"}</Badge>}
         </InlineStack>
       </BlockStack>
     </Card>
