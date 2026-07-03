@@ -9,9 +9,7 @@ import {
   Button,
   Banner,
   DataTable,
-  TextField,
 } from "@shopify/polaris";
-import { useState } from "react";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 
@@ -52,11 +50,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     costMap[c.variant_id][c.units] = Number(c.cost_usd);
   }
 
-  const fxRes = await fetch(`${supaUrl}/rest/v1/app_settings?key=eq.fx_usd_mxn&select=num_value`, { headers: H });
-  const fxRows = (await fxRes.json()) as { num_value: number }[];
-  const fx = fxRows[0]?.num_value ?? 17.49;
-
-  return { variants, costMap, fx };
+  return { variants, costMap };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -92,24 +86,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
   }
 
-  const fx = parseFloat(String(form.get("fx") || ""));
-  if (!isNaN(fx) && fx > 0) {
-    await fetch(`${supaUrl}/rest/v1/app_settings?key=eq.fx_usd_mxn`, {
-      method: "PATCH",
-      headers: H,
-      body: JSON.stringify({ num_value: fx, updated_at: new Date().toISOString() }),
-    });
-  }
-
   return { ok: true, saved: rows.length };
 };
 
 export default function Costs() {
-  const { variants, costMap, fx } = useLoaderData<typeof loader>();
+  const { variants, costMap } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
   const saving = nav.state === "submitting";
-  const [fxValue, setFxValue] = useState(String(fx));
 
   const tableRows = variants.map((v) => [
     v.label,
@@ -146,27 +130,6 @@ export default function Costs() {
           {actionData?.ok && (
             <Banner tone="success">Guardado. {actionData.saved} costo(s) actualizado(s).</Banner>
           )}
-
-          <Card>
-            <BlockStack gap="300">
-              <Text as="h2" variant="headingMd">
-                Tipo de cambio
-              </Text>
-              <Text as="p" tone="subdued">
-                Se usa para convertir tus ingresos (MXN) a USD en el dashboard.
-              </Text>
-              <div style={{ maxWidth: 220 }}>
-                <TextField
-                  label="1 USD = ? MXN"
-                  type="number"
-                  name="fx"
-                  value={fxValue}
-                  onChange={setFxValue}
-                  autoComplete="off"
-                />
-              </div>
-            </BlockStack>
-          </Card>
 
           <Card>
             <BlockStack gap="300">
