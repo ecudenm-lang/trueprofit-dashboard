@@ -1,5 +1,6 @@
+import { useEffect } from "react";
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { useLoaderData, Link } from "@remix-run/react";
+import { useLoaderData, Link, useRevalidator } from "@remix-run/react";
 import {
   Page,
   Text,
@@ -88,6 +89,16 @@ function NetProfitChart({ rows }: { rows: PnlRow[] }) {
 
 export default function Dashboard() {
   const { rows, error } = useLoaderData<typeof loader>();
+  const revalidator = useRevalidator();
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        revalidator.revalidate();
+      }
+    }, 30000);
+    return () => clearInterval(id);
+  }, [revalidator]);
 
   const totals = rows.reduce(
     (a, r) => ({
@@ -115,7 +126,10 @@ export default function Dashboard() {
     <Page>
       <TitleBar title="TrueProfit Copia — P&L en USD" />
       <BlockStack gap="500">
-        <InlineStack align="end">
+        <InlineStack align="space-between" blockAlign="center">
+          <Text as="span" variant="bodySm" tone="subdued">
+            🟢 En vivo · se actualiza solo cada 30s · Meta cada 5 min · pedidos al instante
+          </Text>
           <Link to="/app/costs">
             <Button variant="primary">Configurar costos (COGS)</Button>
           </Link>
